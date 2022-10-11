@@ -1,0 +1,1 @@
+todoapi: hypercorn todoapi --reload --debug --bind todoapi.local.gd:$PORT --access-logfile - --error-logfile - --log-level DEBUG
