@@ -1,13 +1,20 @@
 import base64
+import json
 import dataclasses
 import hashlib
+from hmac import compare_digest
+from os import abort
 import secrets
+import sqlite3
 from termios import XCASE
 import textwrap
 import databases
-from quart import Quart, g, jsonify
-from requests import head, request
-
+from quart import Quart, g
+from quart_schema import validate_request
+from requests import request
+from quart import abort, current_app
+from functools import wraps
+from secrets import compare_digest
 
 app = Quart(__name__)
 
@@ -27,11 +34,12 @@ class gameInfo:
     user_attempts: int
 
 #  added all class regarding the user
+@dataclasses.dataclass
 class userInfo:
-    userId: int
-    userName: str
-    userPassword: str
-    gameStatics: str
+    id: int
+    user_name: str
+    user_password: str
+    # gameStatics: str
 
 async def _get_db():
     db = getattr(g, "_sqlite_db", None)
@@ -59,7 +67,7 @@ def index():
 
 
 @app.route("/user/all", methods=["GET"])
-async def all_books():
+async def all_user():
     db = await _get_db()
     all_books = await db.fetch_all("SELECT * FROM user;")
 
@@ -68,33 +76,43 @@ async def all_books():
 
 
 
-@app.route("/user/signup/<user_name>", methods=["POST"])
-async def usr_signup(user_name):
+@app.route("/signup/", methods=["POST"])
+@validate_request(userInfo)
+async def usr_signup(data):
+    db = await _get_db()
+    person = dataclasses.asdict(data)
     try:
-        data_header = request.headers.get("Authorization")
-        data = base64.b64decode(data_header[8:]).decode("utf-8").split("$")
-        if data is not None:
-            return data
-        else:
-            return 'Failed!!!!!!!!!!!!!!!!'
-        # data = request.get_json()
-        # db = await _get_db()
-        # c = db.cursor()
-        # query = f'INSERT INTO USER VALUES ({data[0]},{data[1]},{data[2]})'
-        # c.exeute(query)
-        # db.commit()
-        # return {"value Insertd":True} 
-    except:
-        return "Insert failed"
+        id = await db.execute(
+            """
+            INSERT INTO user(id, user_name, user_password)
+            VALUES(:id, :user_name, :user_password)
+            """,
+            person,
+        )
+    except sqlite3.IntegrityError as e:
+        abort(409, e)
+    
+    person["id"] = id
+    return person, 201
 
-# @app.route("/user/login", methods=["Post"])
-# async def all_books():
+# http -a alex:cpsc449 http://127.0.0.1:5000/login
+
+# @app.route("/login/", methods=['POST'])
+# @validate_request(userInfo)
+# async def auth(data):
 #     db = await _get_db()
-#     all_books = await db.fetch_all("SELECT * FROM user;")
-
-#     return list(map(dict, all_books))
-
-
+#     person = dataclasses.asdict(data)
+#     try:
+#         id = await db.execute()
+#     except:
+#         pass
+#     password = login.password
+#     if (name == "alex" and
+#         compare_digest(password, "cpsc449")
+#         ):
+#         return {"authorization": True}
+#     else:
+#         return {"authorization": False}
 
 # ALGORITHM = "pbkdf2_sha256"
 
