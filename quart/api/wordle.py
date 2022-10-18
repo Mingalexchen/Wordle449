@@ -11,8 +11,7 @@ import textwrap
 import databases
 from quart import Quart, g
 from quart_schema import validate_request
-from requests import request
-from quart import abort, current_app
+from quart import abort, current_app, request
 from functools import wraps
 from secrets import compare_digest
 
@@ -36,10 +35,8 @@ class gameInfo:
 #  added all class regarding the user
 @dataclasses.dataclass
 class userInfo:
-    id: int
     user_name: str
     user_password: str
-    # gameStatics: str
 
 async def _get_db():
     db = getattr(g, "_sqlite_db", None)
@@ -66,15 +63,18 @@ def index():
     )
 
 
+
+
 @app.route("/user/all", methods=["GET"])
 async def all_user():
     db = await _get_db()
-    all_books = await db.fetch_all("SELECT * FROM user;")
+    all_books = await db.fetch_all("SELECT * FROM UserInfo;")
 
     return list(map(dict, all_books))
 
 
-
+# to test below function (/signup) use below cmd
+# curl -d '{"user_name":"value1", "user_password":"value2"}' -H "Content-Type: application/json" -X POST http://127.0.0.1:5100/signup/
 
 @app.route("/signup/", methods=["POST"])
 @validate_request(userInfo)
@@ -84,78 +84,40 @@ async def usr_signup(data):
     try:
         id = await db.execute(
             """
-            INSERT INTO user(id, user_name, user_password)
-            VALUES(:id, :user_name, :user_password)
+            INSERT INTO UserInfo(user_name, user_password)
+            VALUES(:user_name, :user_password)
             """,
             person,
         )
     except sqlite3.IntegrityError as e:
         abort(409, e)
     
-    person["id"] = id
+    person["user_name"] = id
     return person, 201
 
-# http -a alex:cpsc449 http://127.0.0.1:5000/login
-
-# @app.route("/login/", methods=['POST'])
-# @validate_request(userInfo)
-# async def auth(data):
-#     db = await _get_db()
-#     person = dataclasses.asdict(data)
-#     try:
-#         id = await db.execute()
-#     except:
-#         pass
-#     password = login.password
-#     if (name == "alex" and
-#         compare_digest(password, "cpsc449")
-#         ):
-#         return {"authorization": True}
-#     else:
-#         return {"authorization": False}
-
-# ALGORITHM = "pbkdf2_sha256"
-
-# def hash_password(password, salt=None, iterations=260000):
-#     if salt is None:
-#         salt = secrets.token_hex(16)
-#     assert salt and isinstance(salt, str) and "$" not in salt
-#     assert isinstance(password, str)
-#     pw_hash = hashlib.pbkdf2_hmac(
-#         "sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations
-#     )
-#     b64_hash = base64.b64encode(pw_hash).decode("ascii").strip()
-#     return "{}${}${}${}".format(ALGORITHM, iterations, salt, b64_hash)
-
-
-# def verify_password(password, password_hash):
-#     if (password_hash or "").count("$") != 3:
-#         return False
-#     algorithm, iterations, salt, b64_hash = password_hash.split("$", 3)
-#     iterations = int(iterations)
-#     assert algorithm == ALGORITHM
-#     compare_hash = hash_password(password, salt, iterations)
-#     return secrets.compare_digest(password_hash, compare_hash)
 
 
 
 
+# to test below function (/login) use below cmd
+# curl -d '{"user_name":"user1", "user_password":"abc123"}' -H "Content-Type: application/json" -X POST http://127.0.0.1:5100/login
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+@app.route("/login", methods=["POST"])
+@validate_request(userInfo)
+async def auth(data):
+    
+    db = await _get_db()
+    person = dataclasses.asdict(data)
+    userinfo = await db.fetch_one("SELECT * FROM UserInfo WHERE user_name = :user_name", values={"user_name": person['user_name']})
+    app.logger.debug(userinfo)
+    if userinfo:
+        login_info = dict(userinfo)
+        if (person['user_name'] == login_info["user_name"] and
+            compare_digest(person['user_password'], login_info["user_password"])
+            ):
+            return {"authorization": True}
+        else:
+            abort(401)
+    else:
+        abort(404)
 
