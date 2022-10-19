@@ -23,6 +23,12 @@ CREATE TABLE GameStats (
 
 DROP TABLE IF EXISTS SecretWords;
 CREATE TABLE SecretWords (
-    secret_word VARCHAR NOT NULL primary key
+    secret_id INTEGER NOT NULL primary key,
+    secret_word VARCHAR NOT NULL
 );
 
+DROP TABLE IF EXISTS ValidSecretWords;
+CREATE TABLE ValidSecretWords (
+    valid_id INTEGER NOT NULL primary key,
+    valid_word VARCHAR NOT NULL
+);
