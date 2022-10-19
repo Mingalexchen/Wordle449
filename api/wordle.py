@@ -346,13 +346,8 @@ async def all_words():
 @app.route("/<int:user_id>/newgame", methods=["POST"])
 async def new_game(user_id):
     db = await _get_db()
-###-------!!!!!!!ERROR MESSAGE 
-###-------!!!!!!!RANDOM HAS ERROR
-    new_secret_word = await db.execute(
-        '''
-        SELECT * FROM SecretWords ORDER BY RANDOM() LIMIT 1;
-        ''')
-    new_secret_word = f"{new_secret_word}"
+    new_secret_word = await db.fetch_one("SELECT secret_word FROM SecretWords ORDER BY RANDOM() LIMIT 1;")
+    new_secret_word = new_secret_word[0]
     insert_content = {'game_id': None, 'user_id': user_id, 'game_result':None,
             'answer_attempted':0, 'secret_word':new_secret_word,
             'attempt_1':None, 'attempt_2':None, 'attempt_3':None,
