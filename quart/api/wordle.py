@@ -326,14 +326,13 @@ async def respond_to_an_entry(game_id):
     return return_json
 
 #############---DB content helpers---#############
-# http POST http://127.0.0.1:5100/games/info game_id=<game_id>
-@app.route("/games/info", methods=["POST"])
-async def all_games():
-    d = await request.get_json()
+# http GET http://127.0.0.1:5100/games/info/<int:game_id>
+@app.route("/games/info/<int:game_id>", methods=["GET"])
+async def all_games(game_id):
     db = await _get_db()
     data = await db.fetch_all(
         "SELECT * FROM GameStats where game_id = :game_id;",
-        values={"game_id": d["game_id"]},
+        values={"game_id": game_id},
     )
     info = list(map(dict, data))
     del info[0]["answer_attempted"]
@@ -353,6 +352,33 @@ async def all_games():
     else:
         show["Message"] = f'You Lost the game!!!'
 
+    return jsonify(show)
+
+#############-- Games Played by the User---#############
+# http GET http://127.0.0.1:5100/user/info/<int:user_id>
+@app.route("/user/info/<int:user_id>", methods=["GET"])
+async def all_User_gamesInfo(user_id):
+    db = await _get_db()
+    data = await db.fetch_all(
+        "SELECT game_result FROM GameStats where user_id = :user_id;",
+        values={"user_id": user_id} )
+    info = list(map(dict,data))
+    show = dict()
+    for i in info:
+        try:
+            if i["game_result"] == 0:
+                show["In_Progress"]+=1
+            elif i["game_result"] == 1:
+                show["Total_Win"]+=1
+            else:
+                show["Total_Lost"]+=1
+        except:
+            if i["game_result"] == 0:
+                show["In_Progress"] = 1
+            elif i["game_result"] == 1:
+                show["Total_Win"] = 1
+            else:
+                show["Total_Lost"] = 1
     return jsonify(show)
 
 @app.route("/user/info", methods=["GET"])
@@ -438,7 +464,6 @@ async def increase_attempt_val(game_id):
     return {"update": "success"}
 
 
-
 ###################################################################
 ###################################################################
 #Function to check weather word is in both correct.json or in valid.json or not
@@ -506,7 +531,6 @@ async def matching_word(valid_word, game_id):
             break
     return [d,flag]
 
-
 ###################################################################
 ###################################################################
 # Funtion to store the Win result track of each game played by the user.
@@ -530,7 +554,6 @@ async def check(tmp, game_id):
         abort(409, e)
 
     return False
-
 
 #############---game update---#############
 # Function will accept game_id guess_word and attempt_number from user and store that guess word in DB
@@ -677,7 +700,6 @@ async def update_game(game_id):
             return {"attempt": "failed"}
     else:
         return {"attempt": "Not a valid word"}
-
 
 ##############################################
 
