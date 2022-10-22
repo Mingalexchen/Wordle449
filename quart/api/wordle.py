@@ -73,8 +73,9 @@ async def all_user():
     return list(map(dict, all_books))
 
 # to test below function (/signup) use below cmd
-# curl -d '{"user_name":"value1", "user_password":"value2"}' -H "Content-Type: application/json" -X POST http://127.0.0.1:5100/signup/
+########################################################################################
 # http POST http://127.0.0.1:5100/signup/ user_name=value1 user_password=value2
+
 @app.route("/signup/", methods=["POST"])
 @validate_request(UserInfo)
 async def usr_signup(data):
@@ -95,13 +96,15 @@ async def usr_signup(data):
         "SELECT user_id FROM UserInfo WHERE user_name = :user_name",
         values={"user_name": person["user_name"]},
     )
+    person["user_id"] = f'Your User_id is {list(id)[0]}'
     if id:
-        return person, dict(id), 201
+        return jsonify({"user_id":person["user_id"],"user_name":person["user_name"]}), 201
     else:
         abort(404)
 
-# to test below function (/login) use below cmd
-# curl -d '{"user_name":"user1", "user_password":"abc123"}' -H "Content-Type: application/json" -X POST http://127.0.0.1:5100/login
+#############################################################################
+#############################################################################
+# Login Function to authenticate user
 # http POST http://127.0.0.1:5100/login user_name=value1 user_password=value2
 @app.route("/login", methods=["POST"])
 @validate_request(UserInfo)
@@ -118,9 +121,9 @@ async def auth(data):
         if person["user_name"] == login_info["user_name"] and compare_digest(
             person["user_password"], login_info["user_password"]
         ):
-            return {"authorization": True}
+            return jsonify({"authorization": True}), 200
         else:
-            return {"authorization": "Failed-Incorrect Password"}, 401
+            return jsonify({"authorization": "Failed-Incorrect Password"}), 401
     else:
         abort(404)
 
@@ -366,10 +369,11 @@ async def all_words():
 
     return list(map(dict, all_word))
 
-##############################################
+###########################################################
+###########################################################
+# User can start new game anytime and any number of times.
 
-#############---new game---#############
-# http POST http://127.0.0.1:5100/1/newgame
+# http POST http://127.0.0.1:5100/<user_id>/newgame
 @app.route("/<int:user_id>/newgame", methods=["POST"])
 async def new_game(user_id):
     db = await _get_db()
@@ -406,9 +410,14 @@ async def new_game(user_id):
             """,
             insert_content,
         )
+
+        game_id = (await db.fetch_all(
+        "SELECT game_id FROM GameStats WHERE user_id = :user_id",
+        values={"user_id": user_id}))[-1][0]
+
     except sqlite3.IntegrityError as e:
         abort(409, e)
-    return {"New Game Started": "success"}
+    return jsonify({"New Game Started": "success", "game_id": f'Your new game id is {game_id}'})
 
 ##################################################
 #############---modify game helper---#############
@@ -429,6 +438,10 @@ async def increase_attempt_val(game_id):
     return {"update": "success"}
 
 
+
+###################################################################
+###################################################################
+#Function to check weather word is in both correct.json or in valid.json or not
 async def check_word(valid_word):
     db = await _get_db()
     word = await db.fetch_one(
@@ -441,6 +454,10 @@ async def check_word(valid_word):
         return False
 
 
+###################################################################
+###################################################################
+# Function to restrict user attempt upto 6 and cannot hit single attempt multiple times.
+# example: user cannot hit attempt_1 for more than 1 time
 async def restrict_attempt(game_id, attempt):
     db = await _get_db()
     word = await db.fetch_one(
@@ -452,6 +469,13 @@ async def restrict_attempt(game_id, attempt):
         return True
 
 
+###################################################################
+###################################################################
+# function will compare gussed word by the user and correct word assosiated with that particular user
+# and will return the state of every attempt by the user.
+# if character is at correct place - mark that character as Green Color
+# if character is not at correct place but present in word at ant position  - mark that character as Yellow Color
+# if character is not present in correct word - mark that character as Grey Color 
 async def matching_word(valid_word, game_id):
     db = await _get_db()
     secret_word = (
@@ -483,6 +507,10 @@ async def matching_word(valid_word, game_id):
     return [d,flag]
 
 
+###################################################################
+###################################################################
+# Funtion to store the Win result track of each game played by the user.
+#  if Won this function will update DB and return False(false means cannot continue same game) 
 async def check(tmp, game_id):
     app.logger.debug(tmp)
     for i in tmp[0].values():
@@ -505,6 +533,8 @@ async def check(tmp, game_id):
 
 
 #############---game update---#############
+# Function will accept game_id guess_word and attempt_number from user and store that guess word in DB
+# return the result of that status of gussed word (green, yellow, grey) along with remaining attempts.
 # $ http PUT http://127.0.0.1:5100/<game_id>/newmove entry=<valid_Word> attempt_number=<Attempt_Number>
 @app.route("/<int:game_id>/newmove", methods=["PUT"])
 async def update_game(game_id):
@@ -533,9 +563,9 @@ async def update_game(game_id):
             word = tmp = await matching_word(user_entry, game_id)
             n = await check(tmp, game_id)
             if not n:
-                return {"1st attempt": "won", "word": word}
+                return jsonify({"1st attempt": "won", "word": word[0]})
             else:
-                return {"1st attempt": "5 Attempts Remaining", "word": word}
+                return {"1st attempt": "5 Attempts Remaining", "word": word[0]}
         elif attempt_number == 2 and await restrict_attempt(game_id, "attempt_2"):
 
             insert_content = {"attempt_2": user_entry, "game_id": game_id}
@@ -555,9 +585,9 @@ async def update_game(game_id):
             word = tmp = await matching_word(user_entry, game_id)
             n = await check(tmp, game_id)
             if not n:
-                return {"2nd attempt": "won", "word": word}
+                return jsonify({"2nd attempt": "won", "word": word[0]})
             else:
-                return {"2nd attempt": "4 Attempts Remaining", "word": word}
+                return jsonify({"2nd attempt": "4 Attempts Remaining", "word": word[0]})
         elif attempt_number == 3 and await restrict_attempt(game_id, "attempt_3"):
 
             insert_content = {"attempt_3": user_entry, "game_id": game_id}
@@ -577,9 +607,9 @@ async def update_game(game_id):
             word = tmp = await matching_word(user_entry, game_id)
             n = await check(tmp, game_id)
             if not n:
-                return {"3rd attempt": "won", "word": word}
+                return jsonify({"3rd attempt": "won", "word": word[0]})
             else:
-                return {"3rd attempt": "3 Attempts Remaining", "word": word}
+                return jsonify({"3rd attempt": "3 Attempts Remaining", "word": word[0]})
         elif attempt_number == 4 and await restrict_attempt(game_id, "attempt_4"):
             insert_content = {"attempt_4": user_entry, "game_id": game_id}
             insert_content = dict(insert_content)
@@ -598,9 +628,9 @@ async def update_game(game_id):
             word = tmp = await matching_word(user_entry, game_id)
             n = await check(tmp, game_id)
             if not n:
-                return {"4th attempt": "won", "word": word}
+                return jsonify({"4th attempt": "won", "word": word[0]})
             else:
-                return {"4th attempt": "2 Attempts Remaining", "word": word}
+                return jsonify({"4th attempt": "2 Attempts Remaining", "word": word[0]})
         elif attempt_number == 5 and await restrict_attempt(game_id, "attempt_5"):
             insert_content = {"attempt_5": user_entry, "game_id": game_id}
             insert_content = dict(insert_content)
@@ -619,9 +649,9 @@ async def update_game(game_id):
             word = tmp = await matching_word(user_entry, game_id)
             n = await check(tmp, game_id)
             if not n:
-                return {"5th attempt": "won", "word": word}
+                return jsonify({"5th attempt": "won", "word": word[0]})
             else:
-                return {"5th attempt": "1 Attempts Remaining", "word": word}
+                return jsonify({"5th attempt": "1 Attempts Remaining", "word": word[0]})
         elif attempt_number == 6 and await restrict_attempt(game_id, "attempt_6"):
             insert_content = {"attempt_6": user_entry, "game_id": game_id}
             insert_content = dict(insert_content)
@@ -640,9 +670,9 @@ async def update_game(game_id):
             word = tmp = await matching_word(user_entry, game_id)
             n = await check(tmp, game_id)
             if not n:
-                return {"6th attempt": "won", "word": word}
+                return jsonify({"6th attempt": "won", "word": word[0]})
             else:
-                return {"6th attempt": "you lost....!!! Start New Game", "word": word}
+                return jsonify({"6th attempt": "you lost....!!! Start New Game", "word": word[0]})
         else:
             return {"attempt": "failed"}
     else:
