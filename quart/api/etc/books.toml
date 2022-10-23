@@ -1,3 +1,0 @@
-[DATABASES]
-URL1 = 'sqlite+aiosqlite:///var/books.db'
-URL = 'sqlite+aiosqlite://wordle.db'
